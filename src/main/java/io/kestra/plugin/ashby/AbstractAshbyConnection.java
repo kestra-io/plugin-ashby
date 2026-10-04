@@ -19,6 +19,8 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import jakarta.validation.constraints.NotNull;
 
 @SuperBuilder
@@ -28,11 +30,13 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 public abstract class AbstractAshbyConnection extends Task {
 
+    private static final String DEFAULT_BASE_URL = "https://api.ashbyhq.com";
+
     @Schema(
         title = "The Ashby API Base URL",
         description = "Defaults to https://api.ashbyhq.com"
     )
-    @PluginProperty(dynamic = true)
+    @PluginProperty(group = "connection")
     protected Property<String> baseUrl;
 
     @Schema(
@@ -47,16 +51,19 @@ public abstract class AbstractAshbyConnection extends Task {
     protected <RES> HttpResponse<RES> request(RunContext runContext, String method, String relativePath, java.util.Map<String, Object> body, Class<RES> responseType)
         throws HttpClientException, IllegalVariableEvaluationException {
         
-        String rBaseUrl = this.baseUrl == null ? "https://api.ashbyhq.com" : runContext.render(this.baseUrl).as(String.class).orElse("https://api.ashbyhq.com");
+        String rBaseUrl = runContext.render(this.baseUrl).as(String.class)
+            .map(String::strip)
+            .filter(url -> !url.isEmpty())
+            .map(url -> url.replaceAll("/+$", ""))
+            .orElse(DEFAULT_BASE_URL);
         
         HttpConfiguration httpConfiguration = HttpConfiguration.builder()
-            .auth(BasicAuthConfiguration.builder().username(this.apiKey).password(null).build())
+            .auth(BasicAuthConfiguration.builder().username(this.apiKey).password(Property.ofValue("")).build())
             .build();
             
         HttpRequest.HttpRequestBuilder requestBuilder = HttpRequest.builder()
             .method(method)
             .uri(URI.create(rBaseUrl + relativePath))
-            .addHeader("Content-Type", "application/json")
             .addHeader("Accept", "application/json");
             
         if (body != null) {
@@ -67,10 +74,8 @@ public abstract class AbstractAshbyConnection extends Task {
                     
         try (HttpClient client = new HttpClient(runContext, httpConfiguration)) {
             return client.request(request, responseType);
-        } catch (HttpClientException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to close the Ashby HTTP client", e);
         }
     }
 }

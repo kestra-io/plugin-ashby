@@ -22,6 +22,7 @@ import lombok.experimental.SuperBuilder;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.io.BufferedOutputStream;
 import java.util.Collections;
 import java.util.Map;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -69,93 +70,52 @@ public class List extends AbstractAshbyConnection implements RunnableTask<FetchO
     public FetchOutput run(RunContext runContext) throws Exception {
         FetchType rFetchType = runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
+        HttpResponse<String> response = this.request(runContext, "POST", "/jobPosting.list", java.util.Map.of(), String.class);
+
+        if (response.getBody() == null || response.getBody().isBlank()) {
+            throw new IllegalStateException("Empty response from Ashby API");
+        }
+
+        TypeReference<Map<String, Object>> typeRef = new TypeReference<>() {};
+        Map<String, Object> body = JacksonMapper.ofJson().readValue(response.getBody(), typeRef);
+
+        if (Boolean.FALSE.equals(body.get("success"))) {
+            String errorMsg = body.get("errorInfo") instanceof Map<?, ?> errorInfo && errorInfo.get("message") != null 
+                ? String.valueOf(errorInfo.get("message")) 
+                : JacksonMapper.ofJson().writeValueAsString(body);
+            throw new IllegalStateException("Ashby API request failed: " + errorMsg);
+        }
+
+        java.util.List<Map<String, Object>> results = body.get("results") instanceof java.util.List<?> list 
+            ? (java.util.List<Map<String, Object>>) list 
+            : java.util.List.of();
+
         FetchOutput.FetchOutputBuilder outputBuilder = FetchOutput.builder();
-        java.util.List<Object> allResults = new java.util.ArrayList<>();
-        long size = 0;
 
-        File tempFile = null;
-        OutputStream outputStream = null;
-        if (rFetchType == FetchType.STORE) {
-            tempFile = runContext.workingDir().createTempFile(".ion").toFile();
-            outputStream = new FileOutputStream(tempFile);
-        }
-
-        try {
-            String cursor = null;
-            boolean moreDataAvailable = true;
-            TypeReference<Map<String, Object>> typeRef = new TypeReference<>() {};
-
-            while (moreDataAvailable) {
-                Map<String, Object> requestBody = new java.util.HashMap<>();
-                if (cursor != null) {
-                    requestBody.put("cursor", cursor);
+        switch (rFetchType) {
+            case FETCH_ONE -> {
+                if (!results.isEmpty()) {
+                    outputBuilder.row(results.get(0));
                 }
-
-                HttpResponse<String> response = this.request(runContext, "POST", "/jobPosting.list", requestBody, String.class);
-
-                if (response.getBody() == null || response.getBody().trim().isEmpty()) {
-                    throw new IllegalStateException("Empty response from Ashby API");
-                }
-
-                Map<String, Object> body = JacksonMapper.ofJson().readValue(response.getBody(), typeRef);
-
-                Boolean success = (Boolean) body.get("success");
-                if (success != null && !success) {
-                    Map<String, Object> errorInfo = (Map<String, Object>) body.get("errorInfo");
-                    String errorMsg = errorInfo != null && errorInfo.containsKey("message") 
-                        ? (String) errorInfo.get("message") 
-                        : "Unknown error from Ashby API";
-                    throw new IllegalStateException("Ashby API request failed: " + errorMsg);
-                }
-
-                java.util.List<Map<String, Object>> results = (java.util.List<Map<String, Object>>) body.get("results");
-                if (results == null || results.isEmpty()) {
-                    break;
-                }
-
-                size += results.size();
-
-                switch (rFetchType) {
-                    case FETCH_ONE:
-                        if (allResults.isEmpty()) {
-                            outputBuilder.row(results.get(0));
-                            allResults.add(results.get(0));
-                        }
-                        break;
-                    case FETCH:
-                        allResults.addAll(results);
-                        break;
-                    case STORE:
-                        for (Map<String, Object> row : results) {
-                            FileSerde.write(outputStream, row);
-                        }
-                        break;
-                    case NONE:
-                        break;
-                }
-
-                if (rFetchType == FetchType.FETCH_ONE) {
-                    break;
-                }
-
-                Boolean hasMore = (Boolean) body.get("moreDataAvailable");
-                moreDataAvailable = hasMore != null ? hasMore : false;
-                cursor = (String) body.get("nextCursor");
+                outputBuilder.size(results.isEmpty() ? 0L : 1L);
             }
-        } finally {
-            if (outputStream != null) {
-                outputStream.close();
+            case FETCH -> {
+                outputBuilder.rows(new java.util.ArrayList<>(results))
+                             .size((long) results.size());
             }
-        }
-
-        outputBuilder.size(size);
-        
-        if (rFetchType == FetchType.FETCH) {
-            outputBuilder.rows(allResults);
-        } else if (rFetchType == FetchType.STORE && tempFile != null) {
-            outputBuilder.uri(runContext.storage().putFile(tempFile));
-        } else if (rFetchType == FetchType.FETCH_ONE) {
-            outputBuilder.size(allResults.isEmpty() ? 0L : 1L);
+            case STORE -> {
+                File tempFile = runContext.workingDir().createTempFile(".ion").toFile();
+                try (OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(tempFile), FileSerde.BUFFER_SIZE)) {
+                    for (Map<String, Object> row : results) {
+                        FileSerde.write(outputStream, row);
+                    }
+                }
+                outputBuilder.uri(runContext.storage().putFile(tempFile))
+                             .size((long) results.size());
+            }
+            case NONE -> {
+                outputBuilder.size((long) results.size());
+            }
         }
 
         return outputBuilder.build();
