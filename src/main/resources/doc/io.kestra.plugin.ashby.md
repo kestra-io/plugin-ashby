@@ -1,16 +1,24 @@
-This is the Kestra plugin template. Use it as a starting point for building a new plugin.
+This plugin allows you to integrate Kestra with the [Ashby](https://developers.ashbyhq.com/) ATS and recruiting platform.
 
-## What this template ships
+With this plugin, you can orchestrate your recruiting operations by interacting directly with the Ashby API from your Kestra workflows.
 
-- `Example` is a sample `RunnableTask` that reverses an input string.
-- `Trigger` is a sample polling trigger that fires an execution at random.
+## Prerequisites
 
-## How to build your plugin
+To use this plugin, you will need an **Ashby API Key**.
+You can create one by navigating to your Ashby Admin settings and generating an API key with the necessary permissions for the resources you intend to access.
 
-1. Rename the package `io.kestra.plugin.ashby` to your own, for example `io.kestra.plugin.myservice`.
-2. Update `group`, `name`, `title`, and `description` in `src/main/resources/metadata/index.yaml`.
-3. Replace `src/main/resources/icons/plugin-icon.svg` with your service's icon.
-4. Replace the `Example` and `Trigger` classes with your real tasks and triggers.
-5. Replace this how-to with documentation for your plugin.
+## Using the Plugin
 
-Run `./gradlew lintPluginDocs` before pushing to validate the plugin documentation.
+All tasks require your Ashby API Key for authentication. It is highly recommended to store your API key in Kestra Secrets.
+
+For example, to list all job postings:
+
+```yaml
+id: fetch_job_postings
+namespace: company.team
+
+tasks:
+  - id: list_job_postings
+    type: io.kestra.plugin.ashby.jobpostings.List
+    apiKey: "{{ secret('ASHBY_API_KEY') }}"
+```
