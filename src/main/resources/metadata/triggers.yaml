@@ -1,0 +1,8 @@
+﻿group: io.kestra.plugin.ashby.triggers
+name: "triggers"
+title: "Ashby Triggers"
+description: "Triggers for Ashby events"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
