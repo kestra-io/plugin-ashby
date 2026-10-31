@@ -1,0 +1,8 @@
+group: io.kestra.plugin.ashby.directory
+name: "directory"
+title: "Ashby Directory"
+description: "Tasks for Ashby Directory"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
