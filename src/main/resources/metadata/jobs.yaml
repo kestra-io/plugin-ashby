@@ -1,0 +1,8 @@
+group: io.kestra.plugin.ashby.jobs
+name: "jobs"
+title: "Ashby Jobs"
+description: "Tasks for Ashby Jobs"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

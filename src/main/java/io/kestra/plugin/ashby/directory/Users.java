@@ -14,8 +14,15 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Schema(title = "List Ashby directory")
-@Plugin
+@Schema(title = "List Ashby directory", description = "Retrieves records from the Ashby API with cursor pagination.")
+@Plugin(examples = {@io.kestra.core.models.annotations.Example(title = "List Ashby records", full = true, code = """
+id: list_ashby_records
+namespace: company.team
+tasks:
+  - id: list
+    type: directory
+    apiKey: "{{ secret('ASHBY_API_KEY') }}"
+""")})
 public class Users extends AbstractAshbyList {
     @Override
     protected String endpoint() { return "user.list"; }

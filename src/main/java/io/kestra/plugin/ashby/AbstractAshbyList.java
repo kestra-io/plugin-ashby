@@ -54,7 +54,7 @@ public abstract class AbstractAshbyList extends AbstractAshbyConnection implemen
         FetchOutput.FetchOutputBuilder out = FetchOutput.builder();
         switch (type) {
             case FETCH_ONE -> { if (!rows.isEmpty()) out.row(rows.get(0)); out.size(rows.isEmpty() ? 0L : 1L); }
-            case FETCH -> out.rows(rows).size((long) rows.size());
+            case FETCH -> out.rows(new ArrayList<Object>(rows)).size((long) rows.size());
             case NONE -> out.size((long) rows.size());
             case STORE -> {
                 File file = runContext.workingDir().createTempFile(".ion").toFile();

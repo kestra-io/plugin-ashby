@@ -1,0 +1,8 @@
+group: io.kestra.plugin.ashby.openings
+name: "openings"
+title: "Ashby Openings"
+description: "Tasks for Ashby Openings"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
