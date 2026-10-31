@@ -11,6 +11,7 @@ import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.EqualsAndHashCode;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
@@ -32,7 +33,12 @@ import java.util.Map;
 @NoArgsConstructor
 public abstract class AbstractAshbyList extends AbstractAshbyConnection implements RunnableTask<FetchOutput> {
     @Schema(title = "The way you want to store the data")
+    @Builder.Default
     protected Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
+
+    @io.swagger.v3.oas.annotations.media.Schema(title = "Ashby API request filters", description = "Additional Ashby list request fields such as status, jobId, listedOnly, or syncToken.")
+    @io.kestra.core.models.annotations.PluginProperty(group = "advanced")
+    protected Property<Map<String, Object>> filters;
 
     protected abstract String endpoint();
 
@@ -41,7 +47,9 @@ public abstract class AbstractAshbyList extends AbstractAshbyConnection implemen
         List<Map<String, Object>> rows = new ArrayList<>();
         String cursor = null;
         do {
-            Map<String, Object> requestBody = cursor == null ? Map.of() : Map.of("cursor", cursor);
+            Map<String, Object> requestBody = new java.util.LinkedHashMap<>();
+            if (filters != null) requestBody.putAll(runContext.render(filters).asMap(String.class, Object.class));
+            if (cursor != null) requestBody.put("cursor", cursor);
             HttpResponse<String> response = request(runContext, "POST", "/" + endpoint(), requestBody, String.class);
             if (response.getBody() == null || response.getBody().isBlank()) throw new IllegalStateException("Empty response from Ashby API");
             Map<String, Object> body = JacksonMapper.ofJson().readValue(response.getBody(), new TypeReference<>() {});
