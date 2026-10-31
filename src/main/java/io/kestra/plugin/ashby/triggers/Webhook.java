@@ -50,10 +50,7 @@ public class Webhook extends AbstractWebhookTrigger {
         String signature = context.request().getHeaders().firstValue("Ashby-Signature").orElse("");
         try {
             String secret = context.webhookService().runContext(context.flow(), this).render(signingSecret).as(String.class).orElseThrow();
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            String expected = "sha256=" + HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
-            if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) return Mono.just(HttpResponse.of(HttpResponse.Status.UNAUTHORIZED));
+            if (!isValidSignature(body, signature, secret)) return Mono.just(HttpResponse.of(HttpResponse.Status.UNAUTHORIZED));
             Object payload = io.kestra.core.serializers.JacksonMapper.ofJson().readValue(body, Object.class);
             var execution = context.webhookService().newExecution(context, context.flow(), this, new Output(payload, context.request().getHeaders().map()));
             if (execution.isEmpty()) return Mono.just(HttpResponse.of(HttpResponse.Status.CONFLICT));
@@ -62,6 +59,13 @@ public class Webhook extends AbstractWebhookTrigger {
         } catch (Exception e) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
+    }
+
+    static boolean isValidSignature(String body, String signature, String secret) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String expected = "sha256=" + HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
+        return MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
     }
 
     public record Output(@Schema(title = "Webhook payload") Object body, @Schema(title = "Webhook headers") Map<String, List<String>> headers) implements io.kestra.core.models.tasks.Output {}
