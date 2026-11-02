@@ -1,7 +1,12 @@
 package io.kestra.plugin.ashby.applications;
 
-import io.kestra.core.models.annotations.Plugin;
+import java.util.Map;
 import io.kestra.plugin.ashby.AbstractAshbyList;
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -11,19 +16,48 @@ import lombok.experimental.SuperBuilder;
 
 @SuperBuilder
 @ToString
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = true)
 @Getter
 @NoArgsConstructor
-@Schema(title = "List Ashby applications", description = "Retrieves records from the Ashby API with cursor pagination.")
-@Plugin(examples = {@io.kestra.core.models.annotations.Example(title = "List Ashby records", full = true, code = """
-id: list_ashby_records
-namespace: company.team
-tasks:
-  - id: list
-    type: applications
-    apiKey: "{{ secret('ASHBY_API_KEY') }}"
-""")})
+@Schema(title = "List Ashby applications", description = "Retrieves applications and their candidate and stage details, following all available cursor pages.")
+@Plugin(examples = {@Example(title = "List Ashby applications", full = true, code = """
+    id: list_ashby_applications
+    namespace: company.team
+    tasks:
+      - id: list
+        type: io.kestra.plugin.ashby.applications.List
+        apiKey: "{{ secret('ASHBY_API_KEY') }}"
+        fetchType: STORE
+    """)})
 public class List extends AbstractAshbyList {
+    @PluginProperty(group = "source")
+    @Schema(title = "jobId", description = "Return applications for this job. Omitted by default.")
+    private Property<String> jobId;
+
+    @PluginProperty(group = "source")
+    @Schema(title = "status", description = "Filter by Hired, Archived, Active, or Lead. Omitted by default.")
+    private Property<String> status;
+
+    @PluginProperty(group = "source")
+    @Schema(title = "createdAfter", description = "Minimum creation time as Unix epoch milliseconds. Omitted by default.")
+    private Property<Long> createdAfter;
+
+    @PluginProperty(group = "source")
+    @Schema(title = "syncToken", description = "Token from a previous completed sync. Omitted by default.")
+    private Property<String> syncToken;
+
     @Override
-    protected String endpoint() { return "application.list"; }
+    protected String endpoint() {
+        return "application.list";
+    }
+
+    @Override
+    protected Map<String, Object> requestFilters(RunContext runContext) throws Exception {
+        var body = super.requestFilters(runContext);
+        putFilter(runContext, body, "jobId", jobId, String.class);
+        putFilter(runContext, body, "status", status, String.class);
+        putFilter(runContext, body, "createdAfter", createdAfter, Long.class);
+        putFilter(runContext, body, "syncToken", syncToken, String.class);
+        return body;
+    }
 }

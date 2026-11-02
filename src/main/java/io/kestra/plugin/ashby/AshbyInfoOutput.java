@@ -9,6 +9,6 @@ import java.util.Map;
 @Value
 @Builder
 public class AshbyInfoOutput implements Output {
-    @Schema(title = "Ashby API response", description = "The successful response returned by the Ashby info endpoint.")
+    @Schema(title = "Ashby record", description = "The results object returned by the info endpoint, without the API response envelope.")
     Map<String, Object> result;
 }

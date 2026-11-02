@@ -16,8 +16,6 @@ import io.kestra.core.models.tasks.common.FetchOutput;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import org.junit.jupiter.api.Assertions;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -184,7 +182,7 @@ class ListTest {
 
         assertThat(output.getSize(), is(2L));
         assertThat(output.getUri(), notNullValue());
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(runContext.storage().getFile(output.getUri())))) {
+        try (var reader = runContext.storage().getFile(output.getUri())) {
             java.util.List<Object> rows = FileSerde.readAll(reader).collectList().block();
             assertThat(rows, hasSize(2));
             assertThat(((Map<String, Object>) rows.get(1)).get("title"), is("Designer"));
