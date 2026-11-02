@@ -1,0 +1,8 @@
+group: io.kestra.plugin.ashby.offers
+name: "offers"
+title: "Ashby Offers"
+description: "Tasks for Ashby Offers"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

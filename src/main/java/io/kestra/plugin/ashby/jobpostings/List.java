@@ -1,123 +1,63 @@
 package io.kestra.plugin.ashby.jobpostings;
 
-import io.kestra.core.http.HttpResponse;
+import java.util.Map;
+import io.kestra.plugin.ashby.AbstractAshbyList;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTask;
-import io.kestra.core.models.tasks.common.FetchOutput;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.JacksonMapper;
-import io.kestra.core.serializers.FileSerde;
-import io.kestra.plugin.ashby.AbstractAshbyConnection;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.io.BufferedOutputStream;
-import java.util.Collections;
-import java.util.Map;
-import com.fasterxml.jackson.core.type.TypeReference;
-
 @SuperBuilder
 @ToString
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = true)
 @Getter
 @NoArgsConstructor
-@Schema(
-    title = "Retrieve a list of Job Postings from Ashby",
-    description = "Retrieves all job postings."
-)
-@Plugin(
-    examples = {
-        @Example(
-            title = "Fetch all job postings and store them as internal storage",
-            full = true,
-            code = """
-                id: fetch_job_postings
-                namespace: company.team
-                
-                tasks:
-                  - id: list_job_postings
-                    type: io.kestra.plugin.ashby.jobpostings.List
-                    apiKey: "{{ secret('ASHBY_API_KEY') }}"
-                    fetchType: STORE
-                """
-        )
-    }
-)
-public class List extends AbstractAshbyConnection implements RunnableTask<FetchOutput> {
+@Schema(title = "List Ashby job postings", description = "Retrieves published job postings, including unlisted postings unless listedOnly is true, following all available cursor pages.")
+@Plugin(examples = {@Example(title = "List Ashby job postings", full = true, code = """
+    id: list_ashby_job_postings
+    namespace: company.team
+    tasks:
+      - id: list
+        type: io.kestra.plugin.ashby.jobpostings.List
+        apiKey: "{{ secret('ASHBY_API_KEY') }}"
+        fetchType: STORE
+    """)})
+public class List extends AbstractAshbyList {
+    @PluginProperty(group = "source")
+    @Schema(title = "listedOnly", description = "If true, return only publicly listed postings. Omitted by default.")
+    private Property<Boolean> listedOnly;
 
-    @Builder.Default
-    @Schema(
-        title = "The way you want to store the data",
-        description = "FETCH_ONE outputs the first row, "
-            + "FETCH outputs all the rows, "
-            + "STORE stores all rows in a file, "
-            + "NONE does nothing."
-    )
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
+    @PluginProperty(group = "source")
+    @Schema(title = "includeUnpublishedJobPostings", description = "If true, include unpublished draft postings. Omitted by default.")
+    private Property<Boolean> includeUnpublishedJobPostings;
+
+    @PluginProperty(group = "source")
+    @Schema(title = "location", description = "Filter by location name, case sensitive. Omitted by default.")
+    private Property<String> location;
+
+    @PluginProperty(group = "source")
+    @Schema(title = "department", description = "Filter by department name, case sensitive. Omitted by default.")
+    private Property<String> department;
 
     @Override
-    public FetchOutput run(RunContext runContext) throws Exception {
-        FetchType rFetchType = runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.STORE);
+    protected String endpoint() {
+        return "jobPosting.list";
+    }
 
-        HttpResponse<String> response = this.request(runContext, "POST", "/jobPosting.list", java.util.Map.of(), String.class);
-
-        if (response.getBody() == null || response.getBody().isBlank()) {
-            throw new IllegalStateException("Empty response from Ashby API");
-        }
-
-        TypeReference<Map<String, Object>> typeRef = new TypeReference<>() {};
-        Map<String, Object> body = JacksonMapper.ofJson().readValue(response.getBody(), typeRef);
-
-        if (Boolean.FALSE.equals(body.get("success"))) {
-            String errorMsg = body.get("errorInfo") instanceof Map<?, ?> errorInfo && errorInfo.get("message") != null 
-                ? String.valueOf(errorInfo.get("message")) 
-                : JacksonMapper.ofJson().writeValueAsString(body);
-            throw new IllegalStateException("Ashby API request failed: " + errorMsg);
-        }
-
-        java.util.List<Map<String, Object>> results = body.get("results") instanceof java.util.List<?> list 
-            ? (java.util.List<Map<String, Object>>) list 
-            : java.util.List.of();
-
-        FetchOutput.FetchOutputBuilder outputBuilder = FetchOutput.builder();
-
-        switch (rFetchType) {
-            case FETCH_ONE -> {
-                if (!results.isEmpty()) {
-                    outputBuilder.row(results.get(0));
-                }
-                outputBuilder.size(results.isEmpty() ? 0L : 1L);
-            }
-            case FETCH -> {
-                outputBuilder.rows(new java.util.ArrayList<>(results))
-                             .size((long) results.size());
-            }
-            case STORE -> {
-                File tempFile = runContext.workingDir().createTempFile(".ion").toFile();
-                try (OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(tempFile), FileSerde.BUFFER_SIZE)) {
-                    for (Map<String, Object> row : results) {
-                        FileSerde.write(outputStream, row);
-                    }
-                }
-                outputBuilder.uri(runContext.storage().putFile(tempFile))
-                             .size((long) results.size());
-            }
-            case NONE -> {
-                outputBuilder.size((long) results.size());
-            }
-        }
-
-        return outputBuilder.build();
+    @Override
+    protected Map<String, Object> requestFilters(RunContext runContext) throws Exception {
+        var body = super.requestFilters(runContext);
+        putFilter(runContext, body, "listedOnly", listedOnly, Boolean.class);
+        putFilter(runContext, body, "includeUnpublishedJobPostings", includeUnpublishedJobPostings, Boolean.class);
+        putFilter(runContext, body, "location", location, String.class);
+        putFilter(runContext, body, "department", department, String.class);
+        return body;
     }
 }

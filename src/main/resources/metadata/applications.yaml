@@ -1,0 +1,8 @@
+group: io.kestra.plugin.ashby.applications
+name: "applications"
+title: "Ashby Applications"
+description: "Tasks for Ashby Applications"
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
