@@ -49,7 +49,8 @@ tasks:
 The six Info tasks require their endpoint-specific ID: `jobpostings.Info.jobPostingId`,
 `jobs.Info.jobId`, `openings.Info.openingId`, `applications.Info.applicationId`,
 `candidates.Info.candidateId`, and `offers.Info.offerId`. The output `result` contains only the
-returned record, without the `success` response envelope.
+returned record, without the `success` response envelope. The candidate and job tasks send their IDs
+as `id` to Ashby; the other tasks use their endpoint-specific field names.
 
 ```yaml
 id: ashby_application
@@ -63,7 +64,7 @@ tasks:
 
 Tasks and polling triggers retry HTTP 429 and 5xx responses up to four total attempts.
 `Retry-After` accepts seconds or an HTTP date; without a valid header the delays are 1, 2,
-and 4 seconds. Other HTTP errors fail immediately. Empty bodies, API errors, missing cursors,
+and 4 seconds. Each retry delay is capped at 60 seconds. Other HTTP errors fail immediately. Empty bodies, API errors, missing cursors,
 and cursor cycles fail clearly.
 
 ## Triggers
@@ -72,7 +73,8 @@ and cursor cycles fail clearly.
 then saves only the final token and current hired application IDs. The first successful poll seeds
 state without firing. Later polls return newly hired applications in `trigger.events` and the final
 `trigger.syncToken`. Editing an already hired application does not fire again. An application that
-leaves Hired and later returns to Hired can fire again.
+leaves Hired and later returns to Hired can fire again. If a sync token expires, the trigger
+reseeds without firing; hires since the last successful poll are not reported.
 
 `triggers.JobPostingTrigger` compares snapshots of listed, published job postings. `event` accepts
 `PUBLISHED` (default) or `UNPUBLISHED`. Published events include newly listed postings and changed

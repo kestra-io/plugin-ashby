@@ -60,7 +60,7 @@ public class JobPostingTrigger extends AbstractAshbyPollingTrigger {
     @SuppressWarnings("unchecked")
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
-        var rEvent = runContext.render(event).as(Event.class).orElseThrow();
+        var rEvent = runContext.render(event).as(Event.class).orElse(Event.PUBLISHED);
         var previous = readState(runContext, context);
         var snapshot = new LinkedHashMap<String, Map<String, Object>>();
         var seenCursors = new HashSet<String>();

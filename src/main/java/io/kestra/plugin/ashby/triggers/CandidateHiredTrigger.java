@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -51,10 +50,11 @@ public class CandidateHiredTrigger extends AbstractAshbyPollingTrigger {
             ids.forEach(id -> hiredIds.add(id.toString()));
         }
         var events = new ArrayList<Map<String, Object>>();
-        Set<String> seenCursors = new HashSet<>();
+        var seenCursors = new HashSet<String>();
         String cursor = null;
         Map<String, Object> body;
-        do {
+        var seeding = previous.isEmpty();
+        while (true) {
             var request = new LinkedHashMap<String, Object>();
             if (syncToken != null) {
                 request.put("syncToken", syncToken);
@@ -62,13 +62,27 @@ public class CandidateHiredTrigger extends AbstractAshbyPollingTrigger {
             if (cursor != null) {
                 request.put("cursor", cursor);
             }
-            body = page(runContext, "application.list", request);
+            try {
+                body = page(runContext, "application.list", request);
+            } catch (AshbyClient.ApiException e) {
+                if (syncToken == null || !"sync_token_expired".equals(e.code())) {
+                    throw e;
+                }
+                runContext.logger().warn("Ashby sync token expired; reseeding state. Hires made since the last successful poll will not be reported.");
+                syncToken = null;
+                cursor = null;
+                seenCursors.clear();
+                hiredIds.clear();
+                events.clear();
+                seeding = true;
+                continue;
+            }
             for (var application : AshbyClient.rows(body)) {
                 if (!(application.get("id") instanceof String id) || id.isBlank()) {
                     throw new IllegalStateException("Ashby application has no ID");
                 }
                 if ("Hired".equalsIgnoreCase(String.valueOf(application.get("status")))) {
-                    if (hiredIds.add(id) && previous.isPresent()) {
+                    if (hiredIds.add(id) && !seeding) {
                         events.add(application);
                     }
                 } else {
@@ -76,7 +90,10 @@ public class CandidateHiredTrigger extends AbstractAshbyPollingTrigger {
                 }
             }
             cursor = AshbyClient.nextCursor(body, seenCursors);
-        } while (cursor != null);
+            if (cursor == null) {
+                break;
+            }
+        }
         if (!(body.get("syncToken") instanceof String nextToken) || nextToken.isBlank()) {
             throw new IllegalStateException("Ashby final application page has no syncToken");
         }

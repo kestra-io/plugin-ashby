@@ -3,6 +3,7 @@ package io.kestra.plugin.ashby;
 import java.util.Map;
 
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -19,6 +20,11 @@ public abstract class AbstractAshbyInfo extends AbstractAshbyConnection implemen
     protected abstract String endpoint();
 
     protected abstract Map<String, Object> requestBody(RunContext runContext) throws Exception;
+
+    protected String requiredId(RunContext runContext, Property<String> id, String name) throws Exception {
+        return runContext.render(id).as(String.class).filter(value -> !value.isBlank())
+            .orElseThrow(() -> new IllegalArgumentException(name + " is required: set it to the Ashby " + name + " ID"));
+    }
 
     @Override
     @SuppressWarnings("unchecked")

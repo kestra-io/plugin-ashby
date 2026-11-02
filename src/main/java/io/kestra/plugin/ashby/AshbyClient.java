@@ -1,5 +1,6 @@
 package io.kestra.plugin.ashby;
 
+import java.math.BigInteger;
 import java.net.URI;
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -23,9 +24,9 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 
-/** HTTP, response validation, and pagination shared by tasks and polling triggers. */
 public final class AshbyClient {
     private static final int MAX_ATTEMPTS = 4;
+    private static final long MAX_RETRY_DELAY_MS = 60_000;
 
     private AshbyClient() {
     }
@@ -77,8 +78,7 @@ public final class AshbyClient {
         @Override
         public void configure(HttpClientBuilder builder, RunContext runContext) throws IllegalVariableEvaluationException {
             super.configure(builder, runContext);
-            // Kestra exposes the client builder through auth configuration. Disable Apache's
-            // additional 429/503 retries so the shared retry loop enforces the actual request budget.
+            // Apache would retry 429/503 on its own and exceed MAX_ATTEMPTS.
             builder.disableAutomaticRetries();
         }
     }
@@ -86,11 +86,12 @@ public final class AshbyClient {
     static long retryDelay(HttpResponse<?> response, int attempt) {
         var retryAfter = response.getHeaders().firstValue("Retry-After").orElse("").strip();
         try {
-            return Math.max(0L, Math.multiplyExact(Long.parseLong(retryAfter), 1000L));
-        } catch (NumberFormatException | ArithmeticException ignored) {
+            return new BigInteger(retryAfter).multiply(BigInteger.valueOf(1000))
+                .max(BigInteger.ZERO).min(BigInteger.valueOf(MAX_RETRY_DELAY_MS)).longValue();
+        } catch (NumberFormatException ignored) {
             try {
-                return Math.max(0L, Duration.between(ZonedDateTime.now(), ZonedDateTime.parse(retryAfter, DateTimeFormatter.RFC_1123_DATE_TIME)).toMillis());
-            } catch (DateTimeParseException e) {
+                return Math.min(MAX_RETRY_DELAY_MS, Math.max(0L, Duration.between(ZonedDateTime.now(), ZonedDateTime.parse(retryAfter, DateTimeFormatter.RFC_1123_DATE_TIME)).toMillis()));
+            } catch (DateTimeParseException | ArithmeticException e) {
                 return 1000L << (attempt - 1);
             }
         }
@@ -107,9 +108,23 @@ public final class AshbyClient {
         if (Boolean.FALSE.equals(body.get("success"))) {
             var message = body.get("errorInfo") instanceof Map<?, ?> info && info.get("message") != null
                 ? info.get("message").toString() : JacksonMapper.ofJson().writeValueAsString(body);
-            throw new IllegalStateException("Ashby API request failed: " + message);
+            var code = body.get("errorInfo") instanceof Map<?, ?> info ? info.get("code") : null;
+            throw new ApiException(code instanceof String value ? value : null, "Ashby API request failed: " + message);
         }
         return body;
+    }
+
+    public static final class ApiException extends IllegalStateException {
+        private final String code;
+
+        public ApiException(String code, String message) {
+            super(message);
+            this.code = code;
+        }
+
+        public String code() {
+            return code;
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -43,6 +43,6 @@ public class Info extends AbstractAshbyInfo {
 
     @Override
     protected Map<String, Object> requestBody(RunContext runContext) throws Exception {
-        return Map.of("offerId", runContext.render(offerId).as(String.class).orElseThrow());
+        return Map.of("offerId", requiredId(runContext, offerId, "offerId"));
     }
 }

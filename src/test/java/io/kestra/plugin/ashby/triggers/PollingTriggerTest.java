@@ -77,6 +77,26 @@ class PollingTriggerTest {
     }
 
     @Test
+    void expiredTokenRestartsFullSyncAndReseedsWithoutFiring(WireMockRuntimeInfo server) throws Exception {
+        var trigger = CandidateHiredTrigger.builder().id("hired").type(CandidateHiredTrigger.class.getName())
+            .apiKey(Property.ofValue("test-key")).baseUrl(Property.ofValue(server.getHttpBaseUrl())).build();
+        var context = context(trigger.getId());
+        var condition = condition(trigger, context);
+        applications("{}", "{\"results\":[{\"id\":\"old\",\"status\":\"Hired\"}],\"syncToken\":\"t1\"}");
+        assertTrue(trigger.evaluate(condition, context).isEmpty());
+        applications("{\"syncToken\":\"t1\"}", "{\"results\":[{\"id\":\"partial\",\"status\":\"Hired\"}],\"moreDataAvailable\":true,\"nextCursor\":\"page2\"}");
+        applications("{\"syncToken\":\"t1\",\"cursor\":\"page2\"}", "{\"success\":false,\"errors\":[\"sync_token_expired\"],\"errorInfo\":{\"code\":\"sync_token_expired\",\"message\":\"Expired\"}}");
+        applications("{}", "{\"results\":[{\"id\":\"new\",\"status\":\"Hired\"}],\"moreDataAvailable\":true,\"nextCursor\":\"seed2\"}");
+        applications("{\"cursor\":\"seed2\"}", "{\"results\":[],\"syncToken\":\"t2\"}");
+        assertTrue(trigger.evaluate(condition, context).isEmpty());
+        var state = trigger.readState(condition.getRunContext(), context).orElseThrow();
+        assertEquals("t2", state.get("syncToken"));
+        assertEquals(List.of("new"), state.get("hiredIds"));
+        applications("{\"syncToken\":\"t2\"}", "{\"results\":[{\"id\":\"new\",\"status\":\"Hired\"}],\"syncToken\":\"t3\"}");
+        assertTrue(trigger.evaluate(condition, context).isEmpty());
+    }
+
+    @Test
     void failedOrIncompletePollDoesNotAdvanceState(WireMockRuntimeInfo server) throws Exception {
         var trigger = CandidateHiredTrigger.builder().id("hired").type(CandidateHiredTrigger.class.getName())
             .apiKey(Property.ofValue("test-key")).baseUrl(Property.ofValue(server.getHttpBaseUrl())).build();

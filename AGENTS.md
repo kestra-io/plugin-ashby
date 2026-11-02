@@ -37,15 +37,12 @@ before delegating execution handling to the running Kestra version's core webhoo
 - `src/test/java/io/kestra/plugin/ashby/`: WireMock task/trigger tests and webhook evaluation tests.
 - `src/main/resources/doc/`: plugin how-to documentation.
 - `src/main/resources/metadata/`: subgroup metadata (UTF-8 without BOM).
-- `build.gradle`: dependencies and optional `kestraRuntimeVersion` compatibility verification.
+- `build.gradle`: plugin build and dependencies.
 
 ## Validation
 
-Use Java 21 and run `./gradlew build`. To test the same compiled plugin with Kestra 2.0,
-run `./gradlew test -PkestraRuntimeVersion=2.0.2 -x compileJava -x compileTestJava` after the default build,
-with Java 25 available as a Gradle toolchain (or selected in `JAVA_HOME`). The runtime test property
-defaults to Java 25; `kestraRuntimeJavaVersion` can override the test launcher version.
-All tests use local fixtures; no Ashby credentials are needed.
+Use Java 21 and run `./gradlew build`. All tests use local fixtures; no Ashby credentials are needed.
+Leave Kestra 1.3 and 2.0 runtime compatibility checks to QA.
 
 ## Local rules
 

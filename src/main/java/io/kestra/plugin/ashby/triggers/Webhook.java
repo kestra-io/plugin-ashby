@@ -51,7 +51,7 @@ public class Webhook extends io.kestra.plugin.core.trigger.Webhook {
 
     @Override
     public Mono<HttpResponse<?>> evaluate(WebhookContext context) {
-        RunContext runContext = context.webhookService().runContext(context.flow(), this);
+        var runContext = context.webhookService().runContext(context.flow(), this);
         var body = context.request().getBody() == null ? "" : String.valueOf(context.request().getBody().getContent());
         var signature = context.request().getHeaders().firstValue("Ashby-Signature").orElse("");
         String secret = null;

@@ -93,10 +93,10 @@ class AshbyTasksTest {
             new InfoCase("application.info", "applicationId", url -> io.kestra.plugin.ashby.applications.Info.builder()
                 .id("info").type("io.kestra.plugin.ashby.applications.Info").apiKey(Property.ofValue("test-key"))
                 .baseUrl(Property.ofValue(url)).applicationId(Property.ofValue("record-1")).build()),
-            new InfoCase("candidate.info", "candidateId", url -> io.kestra.plugin.ashby.candidates.Info.builder()
+            new InfoCase("candidate.info", "id", url -> io.kestra.plugin.ashby.candidates.Info.builder()
                 .id("info").type("io.kestra.plugin.ashby.candidates.Info").apiKey(Property.ofValue("test-key"))
                 .baseUrl(Property.ofValue(url)).candidateId(Property.ofValue("record-1")).build()),
-            new InfoCase("job.info", "jobId", url -> io.kestra.plugin.ashby.jobs.Info.builder()
+            new InfoCase("job.info", "id", url -> io.kestra.plugin.ashby.jobs.Info.builder()
                 .id("info").type("io.kestra.plugin.ashby.jobs.Info").apiKey(Property.ofValue("test-key"))
                 .baseUrl(Property.ofValue(url)).jobId(Property.ofValue("record-1")).build()),
             new InfoCase("jobPosting.info", "jobPostingId", url -> io.kestra.plugin.ashby.jobpostings.Info.builder()
@@ -209,6 +209,10 @@ class AshbyTasksTest {
         var headers = java.net.http.HttpHeaders.of(Map.of("Retry-After", List.of(ZonedDateTime.now().plusSeconds(10).format(DateTimeFormatter.RFC_1123_DATE_TIME))), (a, b) -> true);
         var delay = AshbyClient.retryDelay(HttpResponse.builder().headers(headers).build(), 1);
         assertTrue(delay > 0 && delay <= 10000);
+        var longWait = java.net.http.HttpHeaders.of(Map.of("Retry-After", List.of("86400")), (a, b) -> true);
+        assertEquals(60000, AshbyClient.retryDelay(HttpResponse.builder().headers(longWait).build(), 1));
+        var future = java.net.http.HttpHeaders.of(Map.of("Retry-After", List.of(ZonedDateTime.now().plusDays(1).format(DateTimeFormatter.RFC_1123_DATE_TIME))), (a, b) -> true);
+        assertEquals(60000, AshbyClient.retryDelay(HttpResponse.builder().headers(future).build(), 1));
         assertEquals(2000, AshbyClient.retryDelay(HttpResponse.builder().headers(java.net.http.HttpHeaders.of(Map.of(), (a, b) -> true)).build(), 2));
     }
 }
